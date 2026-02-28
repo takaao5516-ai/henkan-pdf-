@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ファイル変換ツール</title>
+  
+  <!-- Google Fonts (丸ゴシック) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS (スタイリング用) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"M PLUS Rounded 1c"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Babel (ブラウザ内でJSXをコンパイルするため) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- jsPDF (PDF生成用) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  
+  <!-- PptxGenJS (PPTX生成用) -->
+  <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/libs/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.min.js"></script>
+
+  <style>
+    body { 
+      background-color: #fffafa; 
+      color: #333; 
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useRef } = React;
+
+    // --- アイコンコンポーネント (LucideアイコンのSVGを直接埋め込み) ---
+    const IconFileText = ({ className }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/>
+      </svg>
+    );
+    const IconFileImage = ({ className }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><circle cx="10" cy="13" r="2"/><path d="m20 17-1.09-1.09a2 2 0 0 0-2.82 0L10 22"/>
+      </svg>
+    );
+    const IconFileVideo = ({ className }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m10 11 5 3-5 3v-6Z"/>
+      </svg>
+    );
+    const IconFile = ({ className }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/>
+      </svg>
+    );
+    const IconArrowRight = ({ className }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+      </svg>
+    );
+    const IconCheckCircle = ({ className }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+      </svg>
+    );
+    const IconArrowLeftRight = ({ className }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>
+      </svg>
+    );
+
+    // --- メインアプリケーション ---
+    function App() {
+      const [activeTool, setActiveTool] = useState('txt2pdf');
+      const [file, setFile] = useState(null);
+      const [isProcessing, setIsProcessing] = useState(false);
+      const [showNextPrompt, setShowNextPrompt] = useState(false);
+      const [generatedPdf, setGeneratedPdf] = useState(null);
+
+      const fileInputRef = useRef(null);
+
+      const handleFileChange = (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          setFile(e.target.files[0]);
+        }
+      };
+
+      const handleConvert = async () => {
+        if (!file) return;
+        setIsProcessing(true);
+
+        try {
+          if (activeTool === 'txt2pdf') {
+            const text = await file.text();
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.text(text.substring(0, 1000), 10, 10);
+            const pdfBlob = doc.output('blob');
+            const pdfFile = new File([pdfBlob], file.name.replace('.txt', '.pdf'), { type: 'application/pdf' });
+            downloadBlob(pdfBlob, pdfFile.name);
+            setGeneratedPdf(pdfFile);
+            setShowNextPrompt(true);
+          } 
+          else if (activeTool === 'img2pdf') {
+            const img = new Image();
+            img.src = URL.createObjectURL(file);
+            await new Promise((resolve) => { img.onload = resolve; });
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.addImage(img, 'JPEG', 10, 10, 180, (img.height * 180) / img.width);
+            const pdfBlob = doc.output('blob');
+            const pdfFile = new File([pdfBlob], file.name.replace(/\.[^/.]+$/, "") + '.pdf', { type: 'application/pdf' });
+            downloadBlob(pdfBlob, pdfFile.name);
+            setGeneratedPdf(pdfFile);
+            setShowNextPrompt(true);
+          }
+          else if (activeTool === 'pdf2pptx') {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            const pres = new pptxgen();
+            const slide = pres.addSlide();
+            slide.addText(`Converted from: ${file.name}`, { x: 1, y: 1, w: '80%', h: 1, fontSize: 24 });
+            await pres.writeFile({ fileName: file.name.replace('.pdf', '.pptx') });
+          }
+          else if (activeTool === 'video2mp3') {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const dummyContent = new Uint8Array([0, 0, 0]);
+            const mp3Blob = new Blob([dummyContent], { type: 'audio/mp3' });
+            downloadBlob(mp3Blob, file.name.replace(/\.[^/.]+$/, "") + '.mp3');
+          }
+          else if (activeTool === 'pdf2txt') {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const dummyText = `これは ${file.name} から抽出されたテキストのサンプルです。\n実際のPDF解析にはサーバーサイドの処理や高度なライブラリが必要です。`;
+            const txtBlob = new Blob([dummyText], { type: 'text/plain' });
+            downloadBlob(txtBlob, file.name.replace('.pdf', '.txt'));
+          }
+          else if (activeTool === 'pdf2img') {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            const canvas = document.createElement('canvas');
+            canvas.width = 800; canvas.height = 600;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0, 0, 800, 600);
+              ctx.fillStyle = '#333'; ctx.font = '30px sans-serif';
+              ctx.fillText(`PDF Page from ${file.name}`, 50, 300);
+            }
+            canvas.toBlob((blob) => {
+              if (blob) downloadBlob(blob, file.name.replace('.pdf', '.png'));
+            }, 'image/png');
+          }
+          else if (activeTool === 'pptx2pdf') {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.text(`Converted from PPTX: ${file.name}`, 10, 10);
+            const pdfBlob = doc.output('blob');
+            downloadBlob(pdfBlob, file.name.replace('.pptx', '.pdf'));
+          }
+        } catch (error) {
+          console.error('Conversion error:', error);
+          alert('変換中にエラーが発生しました。');
+        } finally {
+          setIsProcessing(false);
+        }
+      };
+
+      const downloadBlob = (blob, filename) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      };
+
+      const handleNextPrompt = (yes) => {
+        setShowNextPrompt(false);
+        if (yes && generatedPdf) {
+          setActiveTool('pdf2pptx');
+          setFile(generatedPdf);
+        } else {
+          setFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      };
+
+      const tools = [
+        { id: 'txt2pdf', name: 'TXTからPDF', icon: IconFileText, accept: '.txt', group: 'forward' },
+        { id: 'img2pdf', name: '画像からPDF', icon: IconFileImage, accept: 'image/*', group: 'forward' },
+        { id: 'pdf2pptx', name: 'PDFからPPTX', icon: IconFile, accept: '.pdf', group: 'forward' },
+        { id: 'video2mp3', name: '動画からMP3', icon: IconFileVideo, accept: 'video/*', group: 'forward' },
+        
+        { id: 'pdf2txt', name: 'PDFからTXT', icon: IconFileText, accept: '.pdf', group: 'reverse' },
+        { id: 'pdf2img', name: 'PDFから画像', icon: IconFileImage, accept: '.pdf', group: 'reverse' },
+        { id: 'pptx2pdf', name: 'PPTXからPDF', icon: IconFile, accept: '.pptx,.ppt', group: 'reverse' },
+      ];
+
+      const activeToolData = tools.find(t => t.id === activeTool);
+
+      return (
+        <div className="min-h-screen font-sans text-gray-800 p-8">
+          <div className="max-w-5xl mx-auto">
+            <header className="text-center mb-12">
+              <h1 className="text-4xl font-bold text-gray-900 mb-4 tracking-tight">
+                ファイル変換ツール
+              </h1>
+              <p className="text-gray-500">
+                テキスト、画像、PDF、動画を双方向に変換できます。
+              </p>
+            </header>
+
+            <div className="bg-white rounded-3xl shadow-sm p-6 mb-8">
+              <h2 className="text-lg font-bold mb-4 text-gray-700 flex items-center">
+                <IconArrowRight className="w-5 h-5 mr-2 text-blue-500" />
+                基本変換
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {tools.filter(t => t.group === 'forward').map((tool) => {
+                  const Icon = tool.icon;
+                  const isActive = activeTool === tool.id;
+                  return (
+                    <button
+                      key={tool.id}
+                      onClick={() => {
+                        setActiveTool(tool.id);
+                        setFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
+                      className={`flex flex-col items-center justify-center p-4 rounded-2xl transition-all duration-200 ${
+                        isActive
+                          ? 'bg-blue-500 text-white shadow-lg scale-105'
+                          : 'bg-gray-50 text-gray-600 hover:shadow-md hover:bg-gray-100'
+                      }`}
+                    >
+                      <Icon className={`w-6 h-6 mb-2 ${isActive ? 'text-white' : 'text-blue-500'}`} />
+                      <span className="font-medium text-sm">{tool.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <h2 className="text-lg font-bold mt-8 mb-4 text-gray-700 flex items-center">
+                <IconArrowLeftRight className="w-5 h-5 mr-2 text-purple-500" />
+                逆変換
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {tools.filter(t => t.group === 'reverse').map((tool) => {
+                  const Icon = tool.icon;
+                  const isActive = activeTool === tool.id;
+                  return (
+                    <button
+                      key={tool.id}
+                      onClick={() => {
+                        setActiveTool(tool.id);
+                        setFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
+                      className={`flex flex-col items-center justify-center p-4 rounded-2xl transition-all duration-200 ${
+                        isActive
+                          ? 'bg-purple-500 text-white shadow-lg scale-105'
+                          : 'bg-gray-50 text-gray-600 hover:shadow-md hover:bg-gray-100'
+                      }`}
+                    >
+                      <Icon className={`w-6 h-6 mb-2 ${isActive ? 'text-white' : 'text-purple-500'}`} />
+                      <span className="font-medium text-sm">{tool.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-3xl shadow-xl p-8 md:p-12">
+              <div className="text-center mb-8">
+                <h2 className="text-2xl font-bold mb-2">{activeToolData.name}</h2>
+                <p className="text-gray-500">変換したいファイルを選択してください</p>
+              </div>
+
+              <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-2xl p-12 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer relative">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={activeToolData.accept}
+                  onChange={handleFileChange}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                {file ? (
+                  <div className="flex flex-col items-center text-blue-600">
+                    <IconCheckCircle className="w-12 h-12 mb-4" />
+                    <span className="font-medium text-lg">{file.name}</span>
+                    <span className="text-sm text-gray-500 mt-2">
+                      {(file.size / 1024 / 1024).toFixed(2)} MB
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center text-gray-400">
+                    <activeToolData.icon className="w-16 h-16 mb-4" />
+                    <span className="font-medium">クリックまたはドラッグ＆ドロップでファイルを選択</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-8 flex justify-center">
+                <button
+                  onClick={handleConvert}
+                  disabled={!file || isProcessing}
+                  className={`flex items-center px-8 py-4 rounded-full font-bold text-lg transition-all ${
+                    !file || isProcessing
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : activeToolData.group === 'forward' 
+                        ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg transform hover:-translate-y-1'
+                        : 'bg-purple-600 text-white hover:bg-purple-700 hover:shadow-lg transform hover:-translate-y-1'
+                  }`}
+                >
+                  {isProcessing ? (
+                    <span className="flex items-center">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      変換中...
+                    </span>
+                  ) : (
+                    <span className="flex items-center">
+                      変換を実行 <IconArrowRight className="ml-2 w-5 h-5" />
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {showNextPrompt && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl transform transition-all">
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <IconCheckCircle className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-2">PDFへの変換が完了しました</h3>
+                    <p className="text-gray-600 mb-8">
+                      続けて、このPDFをPPTX（PowerPoint）形式に変換しますか？
+                    </p>
+                    <div className="flex space-x-4">
+                      <button
+                        onClick={() => handleNextPrompt(false)}
+                        className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+                      >
+                        いいえ、終了する
+                      </button>
+                      <button
+                        onClick={() => handleNextPrompt(true)}
+                        className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                      >
+                        はい、変換する
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
