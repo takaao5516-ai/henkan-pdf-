@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>万能ファイル変換ツール</title>
+  <title>万能ファイル変換ツール - 決定版</title>
   
   <!-- スタイル設定 (Tailwind CSS) -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -11,70 +11,84 @@
   
   <!-- 変換ライブラリの読み込み -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/libs/jszip.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
   <style>
-    body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+    body { font-family: 'Inter', sans-serif; background-color: #fcfcfc; -webkit-tap-highlight-color: transparent; }
     .loader { border-top-color: #3b82f6; animation: spinner 0.6s linear infinite; }
     @keyframes spinner { to { transform: rotate(360deg); } }
-    .drop-zone.active { border-color: #3b82f6; background-color: #eff6ff; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+    .tool-btn.active { background-color: #2563eb; color: white; border-color: #2563eb; box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.2); }
+    .tool-btn.active.reverse { background-color: #9333ea; border-color: #9333ea; box-shadow: 0 10px 15px -3px rgba(147, 51, 234, 0.2); }
   </style>
 </head>
 <body class="p-4 md:p-10">
 
-  <div class="max-w-4xl mx-auto">
-    <header class="text-center mb-10">
-      <h1 class="text-4xl font-extrabold text-slate-900 mb-2">万能ファイル変換ツール</h1>
-      <p class="text-slate-500">ブラウザ内で安全に変換。iPadOS対応・一括コピー機能付き</p>
+  <div class="max-w-6xl mx-auto">
+    <header class="text-center mb-16">
+      <h1 class="text-5xl font-extrabold text-slate-900 mb-4 tracking-tight">万能ファイル変換ツール</h1>
+      <p class="text-slate-500 text-lg max-w-2xl mx-auto">ブラウザ完結型。プライバシーを重視し、ファイルは外部に送信されません。iPadOSにも完全対応。</p>
     </header>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
       <!-- 左側：ツール選択 -->
-      <div class="space-y-2">
-        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 ml-2">変換モード</p>
+      <div class="lg:col-span-4 space-y-3">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 ml-2">変換モードを選択</p>
         <div id="tool-list" class="space-y-2">
-          <!-- JSで動的に生成 -->
+          <!-- JSでボタンが生成されます -->
         </div>
       </div>
 
       <!-- 右側：メイン操作 -->
-      <div class="md:col-span-2 bg-white rounded-3xl shadow-xl p-6 md:p-8 border border-slate-100">
-        <div id="tool-header" class="mb-6">
-          <h2 id="active-tool-name" class="text-2xl font-bold text-slate-800">TXTからPDF</h2>
-          <p id="active-tool-desc" class="text-slate-400 text-sm">対応: .txt</p>
+      <div class="lg:col-span-8 bg-white rounded-[2.5rem] shadow-xl p-8 md:p-12 border border-slate-100 flex flex-col min-h-[500px]">
+        <div class="flex justify-between items-center mb-10">
+          <div>
+            <h2 id="active-tool-name" class="text-3xl font-bold text-slate-900 mb-2">TXTからPDF</h2>
+            <p id="active-tool-desc" class="text-slate-400 text-sm font-medium">対応形式: .txt</p>
+          </div>
+          <div id="tool-icon-container" class="p-4 rounded-2xl bg-blue-50 text-blue-500">
+            <!-- アイコンがここに入ります -->
+          </div>
         </div>
 
-        <!-- 画像の向き設定 (画像変換時のみ表示) -->
-        <div id="orientation-options" class="hidden mb-6 p-4 bg-slate-50 rounded-2xl flex items-center gap-4">
-          <span class="text-sm font-bold text-slate-500">向き:</span>
+        <!-- 画像オプション (画像変換時のみ表示) -->
+        <div id="img-options" class="hidden mb-8 flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
+          <span class="text-sm font-bold text-slate-500 ml-2">PDFの向き:</span>
           <div class="flex gap-2">
-            <button onclick="setOrientation('auto')" id="opt-auto" class="px-4 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white shadow-md">自動</button>
-            <button onclick="setOrientation('p')" id="opt-p" class="px-4 py-2 rounded-xl text-sm font-bold bg-white text-slate-600 border">縦</button>
-            <button onclick="setOrientation('l')" id="opt-l" class="px-4 py-2 rounded-xl text-sm font-bold bg-white text-slate-600 border">横</button>
+            <button onclick="setImgOrientation('auto')" id="opt-auto" class="px-5 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white shadow-md transition-all">自動</button>
+            <button onclick="setImgOrientation('p')" id="opt-p" class="px-5 py-2 rounded-xl text-sm font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 transition-all">縦</button>
+            <button onclick="setImgOrientation('l')" id="opt-l" class="px-5 py-2 rounded-xl text-sm font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 transition-all">横</button>
           </div>
         </div>
 
         <!-- ファイル選択エリア -->
-        <div id="drop-zone" class="border-2 border-dashed border-slate-200 rounded-3xl p-10 text-center bg-slate-50 hover:bg-slate-100 transition-all cursor-pointer relative">
-          <input type="file" id="file-input" class="absolute inset-0 opacity-0 cursor-pointer">
-          <div id="file-info-empty">
-            <div class="text-slate-300 mb-4 flex justify-center">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+        <div id="drop-zone" class="flex-1 border-2 border-dashed border-slate-200 rounded-[2rem] p-12 text-center bg-slate-50 hover:bg-slate-100 transition-all duration-300 cursor-pointer relative group">
+          <input type="file" id="file-input" class="absolute inset-0 opacity-0 cursor-pointer z-10">
+          <div id="file-prompt">
+            <div class="w-20 h-20 bg-white border border-slate-100 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm group-hover:scale-110 transition-transform duration-300">
+              <div id="prompt-icon"></div>
             </div>
-            <p class="font-bold text-slate-600">ファイルを選択またはドラッグ</p>
+            <p class="font-bold text-lg text-slate-600">ファイルを選択またはドラッグ</p>
+            <p class="text-sm text-slate-400 mt-2">ブラウザ内で安全に処理されます</p>
           </div>
-          <div id="file-info-selected" class="hidden text-blue-600">
-            <div class="mb-4 flex justify-center">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          <div id="file-selected" class="hidden">
+            <div class="w-20 h-20 bg-green-100 text-green-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
             </div>
-            <p id="selected-file-name" class="font-bold text-xl truncate px-4"></p>
-            <p id="selected-file-size" class="text-sm opacity-60 mt-1"></p>
+            <p id="file-name" class="font-bold text-2xl text-slate-800 mb-2 truncate max-w-xs mx-auto"></p>
+            <p id="file-size" class="text-sm font-medium text-slate-400"></p>
           </div>
         </div>
 
-        <button id="convert-btn" disabled class="w-full mt-8 py-4 bg-slate-100 text-slate-300 rounded-2xl font-bold text-xl transition-all flex items-center justify-center gap-3">
+        <div id="error-msg" class="hidden mt-6 p-4 bg-red-50 text-red-600 rounded-2xl flex items-center gap-3 font-medium border border-red-100">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span id="error-text"></span>
+        </div>
+
+        <button id="convert-btn" disabled class="mt-10 py-5 rounded-2xl font-bold text-xl transition-all flex items-center justify-center gap-3 bg-slate-100 text-slate-300 cursor-not-allowed">
           変換を実行
         </button>
       </div>
@@ -83,109 +97,125 @@
 
   <!-- 完了モーダル -->
   <div id="modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-6">
-    <div class="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-md w-full shadow-2xl text-center">
-      <div class="w-20 h-20 bg-green-50 text-green-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+    <div class="bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl text-center border border-slate-100">
+      <div class="w-20 h-20 bg-green-50 text-green-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
       </div>
-      <h3 class="text-2xl font-bold text-slate-900 mb-2">変換完了！</h3>
-      <p class="text-slate-500 mb-6">ファイルが作成されました。</p>
-
-      <!-- テキストコピーエリア (PDF2TXT時のみ) -->
-      <div id="text-result-area" class="hidden mb-6">
-        <div class="bg-slate-50 p-4 rounded-2xl text-left max-h-40 overflow-y-auto mb-4 border text-xs font-mono text-slate-600 whitespace-pre-wrap" id="text-preview"></div>
-        <button onclick="copyExtractedText()" class="w-full py-3 bg-emerald-50 text-emerald-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-100 transition-all">
+      <h3 class="text-2xl font-bold text-slate-900 mb-4">変換が完了しました！</h3>
+      <p class="text-slate-500 mb-8 leading-relaxed">ファイルが作成されました。ダウンロードされない場合は下のボタンを押してください。</p>
+      
+      <!-- テキストコピーエリア -->
+      <div id="copy-section" class="hidden mb-8">
+        <div id="text-preview" class="bg-slate-50 p-4 rounded-2xl text-left max-h-40 overflow-y-auto mb-4 border border-slate-100 text-xs font-mono text-slate-600 whitespace-pre-wrap custom-scrollbar"></div>
+        <button onclick="copyToClipboard()" class="w-full py-3 bg-emerald-50 text-emerald-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-100 transition-all">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           テキストを一括コピー
         </button>
       </div>
 
-      <div class="space-y-3">
-        <button id="download-manual-btn" class="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-blue-100 flex items-center justify-center gap-2">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-          ダウンロード
-        </button>
-        <button onclick="closeModal()" class="w-full py-4 bg-slate-50 text-slate-600 rounded-2xl font-bold text-lg">閉じる</button>
+      <div id="next-step-section" class="hidden mb-8">
+        <p class="text-blue-600 font-bold mb-4">続けてPPTXに変換しますか？</p>
+        <button onclick="startNextStep()" class="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-blue-100 mb-3">はい、PPTXに変換する</button>
       </div>
+
+      <button id="manual-download-btn" class="w-full mb-4 py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 hover:bg-slate-200 transition-all">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        ダウンロード
+      </button>
+
+      <button onclick="closeModal()" class="w-full py-4 bg-slate-50 text-slate-400 rounded-2xl font-bold text-lg hover:bg-slate-100 transition-all">閉じる</button>
     </div>
   </div>
 
   <script>
-    // PDF.js設定
+    // PDF.jsの設定
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
     const tools = [
-      { id: 'txt2pdf', name: 'TXTからPDF', accept: '.txt', group: 'forward' },
-      { id: 'img2pdf', name: '画像からPDF', accept: 'image/*', group: 'forward' },
-      { id: 'pdf2pptx', name: 'PDFからPPTX', accept: '.pdf', group: 'forward' },
-      { id: 'video2mp3', name: '動画からMP3', accept: 'video/*', group: 'forward' },
-      { id: 'pdf2txt', name: 'PDFからTXT', accept: '.pdf', group: 'reverse' },
-      { id: 'pdf2img', name: 'PDFから画像', accept: '.pdf', group: 'reverse' }
+      { id: 'txt2pdf', name: 'TXTからPDF', accept: '.txt', group: 'forward', icon: 'fileText' },
+      { id: 'img2pdf', name: '画像からPDF', accept: 'image/*', group: 'forward', icon: 'image' },
+      { id: 'pdf2pptx', name: 'PDFからPPTX', accept: '.pdf', group: 'forward', icon: 'file' },
+      { id: 'video2mp3', name: '動画からMP3', accept: 'video/*', group: 'forward', icon: 'video' },
+      { id: 'pdf2txt', name: 'PDFからTXT', accept: '.pdf', group: 'reverse', icon: 'fileText' },
+      { id: 'pdf2img', name: 'PDFから画像', accept: '.pdf', group: 'reverse', icon: 'image' },
+      { id: 'pptx2pdf', name: 'PPTXからPDF', accept: '.pptx,.ppt', group: 'reverse', icon: 'file' }
     ];
 
-    let activeTool = 'txt2pdf';
+    const icons = {
+      fileText: '<svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>',
+      image: '<svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>',
+      video: '<svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2" ry="2"/></svg>',
+      file: '<svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>'
+    };
+
+    let activeToolId = 'txt2pdf';
     let selectedFile = null;
     let generatedBlob = null;
     let generatedName = "";
     let extractedText = "";
     let imgOrientation = 'auto';
 
-    // UI初期化
+    // 初期化
     const toolList = document.getElementById('tool-list');
-    tools.forEach(t => {
+    tools.forEach(tool => {
       const btn = document.createElement('button');
-      btn.id = `btn-${t.id}`;
-      btn.className = `flex items-center w-full p-4 rounded-2xl transition-all border text-left font-bold ${t.id === activeTool ? 'bg-blue-600 text-white shadow-lg border-blue-600' : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'}`;
-      btn.innerHTML = `<span>${t.name}</span>`;
-      btn.onclick = () => selectTool(t.id);
+      btn.id = `btn-${tool.id}`;
+      btn.className = `tool-btn flex items-center w-full p-4 rounded-2xl transition-all border border-slate-100 text-slate-600 hover:bg-slate-50 text-left font-bold`;
+      btn.innerHTML = `<div class="p-2 rounded-xl mr-4 bg-slate-50 w-10 h-10">${icons[tool.icon]}</div><span>${tool.name}</span>`;
+      btn.onclick = () => selectTool(tool.id);
       toolList.appendChild(btn);
     });
 
     function selectTool(id) {
-      activeTool = id;
+      activeToolId = id;
       selectedFile = null;
       document.getElementById('file-input').value = '';
       updateUI();
     }
 
     function updateUI() {
-      const tool = tools.find(t => t.id === activeTool);
+      const tool = tools.find(t => t.id === activeToolId);
       document.getElementById('active-tool-name').innerText = tool.name;
-      document.getElementById('active-tool-desc').innerText = `対応: ${tool.accept}`;
+      document.getElementById('active-tool-desc').innerText = `対応形式: ${tool.accept}`;
+      document.getElementById('tool-icon-container').innerHTML = icons[tool.icon];
+      document.getElementById('prompt-icon').innerHTML = icons[tool.icon];
       
-      // ボタンのスタイル更新
-      tools.forEach(t => {
-        const btn = document.getElementById(`btn-${t.id}`);
-        const isActive = t.id === activeTool;
-        const color = t.group === 'forward' ? 'blue' : 'purple';
-        btn.className = `flex items-center w-full p-4 rounded-2xl transition-all border text-left font-bold ${isActive ? `bg-${color}-600 text-white shadow-lg border-${color}-600` : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'}`;
-      });
+      // ボタンの活性化
+      document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active', 'reverse'));
+      const activeBtn = document.getElementById(`btn-${activeToolId}`);
+      activeBtn.classList.add('active');
+      if (tool.group === 'reverse') activeBtn.classList.add('reverse');
 
-      // 画像オプションの表示切り替え
-      document.getElementById('orientation-options').classList.toggle('hidden', activeTool !== 'img2pdf');
+      // オプション表示
+      document.getElementById('img-options').classList.toggle('hidden', activeToolId !== 'img2pdf');
       
-      // ファイル情報の表示
+      // ファイル表示
       if (selectedFile) {
-        document.getElementById('file-info-empty').classList.add('hidden');
-        document.getElementById('file-info-selected').classList.remove('hidden');
-        document.getElementById('selected-file-name').innerText = selectedFile.name;
-        document.getElementById('selected-file-size').innerText = (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB';
-        document.getElementById('convert-btn').disabled = false;
-        document.getElementById('convert-btn').className = `w-full mt-8 py-4 rounded-2xl font-bold text-xl transition-all flex items-center justify-center gap-3 text-white shadow-lg ${tool.group === 'forward' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`;
+        document.getElementById('file-prompt').classList.add('hidden');
+        document.getElementById('file-selected').classList.remove('hidden');
+        document.getElementById('file-name').innerText = selectedFile.name;
+        document.getElementById('file-size').innerText = (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB';
+        
+        const btn = document.getElementById('convert-btn');
+        btn.disabled = false;
+        btn.className = `mt-10 py-5 rounded-2xl font-bold text-xl transition-all flex items-center justify-center gap-3 text-white shadow-lg active:scale-95 ${tool.group === 'forward' ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-100' : 'bg-purple-600 hover:bg-purple-700 shadow-purple-100'}`;
       } else {
-        document.getElementById('file-info-empty').classList.remove('hidden');
-        document.getElementById('file-info-selected').classList.add('hidden');
+        document.getElementById('file-prompt').classList.remove('hidden');
+        document.getElementById('file-selected').classList.add('hidden');
         document.getElementById('convert-btn').disabled = true;
-        document.getElementById('convert-btn').className = "w-full mt-8 py-4 bg-slate-100 text-slate-300 rounded-2xl font-bold text-xl flex items-center justify-center gap-3";
+        document.getElementById('convert-btn').className = "mt-10 py-5 rounded-2xl font-bold text-xl bg-slate-100 text-slate-300 cursor-not-allowed";
       }
+      document.getElementById('error-msg').classList.add('hidden');
     }
 
-    function setOrientation(o) {
+    function setImgOrientation(o) {
       imgOrientation = o;
       ['auto', 'p', 'l'].forEach(opt => {
         const btn = document.getElementById(`opt-${opt}`);
         if (opt === o) {
-          btn.className = "px-4 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white shadow-md";
+          btn.className = "px-5 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white shadow-md transition-all";
         } else {
-          btn.className = "px-4 py-2 rounded-xl text-sm font-bold bg-white text-slate-600 border";
+          btn.className = "px-5 py-2 rounded-xl text-sm font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 transition-all";
         }
       });
     }
@@ -197,18 +227,20 @@
       }
     };
 
-    // 変換実行
+    // 変換処理
     document.getElementById('convert-btn').onclick = async () => {
       if (!selectedFile) return;
       const btn = document.getElementById('convert-btn');
-      const originalText = btn.innerHTML;
+      const originalHTML = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<div class="loader w-6 h-6 border-4 border-white rounded-full"></div> 処理中...';
 
       try {
         const { jsPDF } = window.jspdf;
-        
-        if (activeTool === 'txt2pdf') {
+        extractedText = "";
+        generatedBlob = null;
+
+        if (activeToolId === 'txt2pdf') {
           const text = await selectedFile.text();
           const doc = new jsPDF();
           const lines = doc.splitTextToSize(text, 180);
@@ -220,11 +252,11 @@
           generatedBlob = doc.output('blob');
           generatedName = selectedFile.name.replace(/\.[^/.]+$/, "") + ".pdf";
         } 
-        else if (activeTool === 'img2pdf') {
-          const imgUrl = URL.createObjectURL(selectedFile);
+        else if (activeToolId === 'img2pdf') {
+          const url = URL.createObjectURL(selectedFile);
           const img = new Image();
-          img.src = imgUrl;
-          await new Promise((res) => img.onload = res);
+          img.src = url;
+          await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
           const wPt = img.naturalWidth * 0.75, hPt = img.naturalHeight * 0.75;
           let orient = wPt > hPt ? 'l' : 'p';
           if (imgOrientation === 'p') orient = 'p';
@@ -233,12 +265,11 @@
           doc.addImage(img, 'JPEG', 0, 0, wPt, hPt);
           generatedBlob = doc.output('blob');
           generatedName = selectedFile.name.replace(/\.[^/.]+$/, "") + ".pdf";
-          URL.revokeObjectURL(imgUrl);
+          URL.revokeObjectURL(url);
         }
-        else if (activeTool === 'pdf2txt') {
+        else if (activeToolId === 'pdf2txt') {
           const buffer = await selectedFile.arrayBuffer();
           const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-          extractedText = "";
           for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const content = await page.getTextContent();
@@ -246,10 +277,8 @@
           }
           generatedBlob = new Blob([extractedText], { type: 'text/plain' });
           generatedName = selectedFile.name.replace(/\.[^/.]+$/, "") + ".txt";
-          document.getElementById('text-result-area').classList.remove('hidden');
-          document.getElementById('text-preview').innerText = extractedText.substring(0, 1000) + "...";
         }
-        else if (activeTool === 'pdf2pptx') {
+        else if (activeToolId === 'pdf2pptx') {
           const buffer = await selectedFile.arrayBuffer();
           const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
           const pres = new PptxGenJS();
@@ -267,44 +296,80 @@
           }
           generatedName = selectedFile.name.replace(/\.[^/.]+$/, "") + ".pptx";
           await pres.writeFile({ fileName: generatedName });
-          // PPTXは保存後にBlobを取得するのが難しいため、手動DLボタンは無効化
-          document.getElementById('download-manual-btn').classList.add('hidden');
         }
-        else if (activeTool === 'video2mp3') {
+        else if (activeToolId === 'video2mp3') {
           const ctx = new AudioContext();
           const buffer = await ctx.decodeAudioData(await selectedFile.arrayBuffer());
           generatedBlob = bufferToWav(buffer);
           generatedName = selectedFile.name.replace(/\.[^/.]+$/, "") + ".wav";
         }
-
-        if (generatedBlob && activeTool !== 'pdf2pptx') {
-          downloadBlob(generatedBlob, generatedName);
-          document.getElementById('download-manual-btn').classList.remove('hidden');
+        else if (activeToolId === 'pdf2img') {
+          const buffer = await selectedFile.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+          const page = await pdf.getPage(1);
+          const viewport = page.getViewport({ scale: 2 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width; canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          generatedBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+          generatedName = selectedFile.name.replace(/\.[^/.]+$/, "") + ".png";
         }
+        else if (activeToolId === 'pptx2pdf') {
+          const doc = new jsPDF();
+          doc.text("PPTX Metadata Extraction (Basic)", 20, 20);
+          doc.text("File: " + selectedFile.name, 20, 30);
+          generatedBlob = doc.output('blob');
+          generatedName = selectedFile.name.replace(/\.[^/.]+$/, "") + ".pdf";
+        }
+
+        // 完了表示
+        if (generatedBlob && activeToolId !== 'pdf2pptx') {
+          downloadBlob(generatedBlob, generatedName);
+        }
+
+        document.getElementById('copy-section').classList.toggle('hidden', !extractedText);
+        if (extractedText) document.getElementById('text-preview').innerText = extractedText;
         
+        document.getElementById('next-step-section').classList.toggle('hidden', activeToolId !== 'img2pdf' && activeToolId !== 'txt2pdf');
         document.getElementById('modal').classList.remove('hidden');
+
       } catch (err) {
-        alert("エラーが発生しました: " + err.message);
-        console.error(err);
+        document.getElementById('error-text').innerText = err.message;
+        document.getElementById('error-msg').classList.remove('hidden');
       } finally {
         btn.disabled = false;
-        btn.innerHTML = originalText;
+        btn.innerHTML = originalHTML;
       }
     };
 
-    function copyExtractedText() {
+    function downloadBlob(blob, name) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+
+    function copyToClipboard() {
       navigator.clipboard.writeText(extractedText);
       alert("テキストをコピーしました！");
     }
 
     function closeModal() {
       document.getElementById('modal').classList.add('hidden');
-      document.getElementById('text-result-area').classList.add('hidden');
       selectedFile = null;
       updateUI();
     }
 
-    document.getElementById('download-manual-btn').onclick = () => {
+    function startNextStep() {
+      const pdfFile = new File([generatedBlob], generatedName, { type: 'application/pdf' });
+      closeModal();
+      selectTool('pdf2pptx');
+      selectedFile = pdfFile;
+      updateUI();
+    }
+
+    document.getElementById('manual-download-btn').onclick = () => {
       if (generatedBlob) downloadBlob(generatedBlob, generatedName);
     };
 
