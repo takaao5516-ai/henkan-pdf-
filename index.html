@@ -1,472 +1,329 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  FileText, 
-  Image as ImageIcon, 
-  Video, 
-  File as FileIcon, 
-  ArrowRight, 
-  CheckCircle2, 
-  ArrowLeftRight,
-  Loader2,
-  Download,
-  AlertCircle
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { jsPDF } from 'jspdf';
-import pptxgen from 'pptxgenjs';
-import * as pdfjsLib from 'pdfjs-dist';
-import { cn } from './lib/utils';
-
-// Set up PDF.js worker
-// Using unpkg for better reliability and ensuring .mjs extension for version 5+
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-
-type ToolId = 'txt2pdf' | 'img2pdf' | 'pdf2pptx' | 'video2mp3' | 'pdf2txt' | 'pdf2img' | 'pptx2pdf';
-
-interface Tool {
-  id: ToolId;
-  name: string;
-  icon: React.ElementType;
-  accept: string;
-  group: 'forward' | 'reverse';
-  color: string;
-}
-
-const TOOLS: Tool[] = [
-  { id: 'txt2pdf', name: 'TXTからPDF', icon: FileText, accept: '.txt', group: 'forward', color: 'blue' },
-  { id: 'img2pdf', name: '画像からPDF', icon: ImageIcon, accept: 'image/*', group: 'forward', color: 'blue' },
-  { id: 'pdf2pptx', name: 'PDFからPPTX', icon: FileIcon, accept: '.pdf', group: 'forward', color: 'blue' },
-  { id: 'video2mp3', name: '動画からMP3', icon: Video, accept: 'video/*', group: 'forward', color: 'blue' },
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>万能ファイル変換ツール</title>
   
-  { id: 'pdf2txt', name: 'PDFからTXT', icon: FileText, accept: '.pdf', group: 'reverse', color: 'purple' },
-  { id: 'pdf2img', name: 'PDFから画像', icon: ImageIcon, accept: '.pdf', group: 'reverse', color: 'purple' },
-  { id: 'pptx2pdf', name: 'PPTXからPDF', icon: FileIcon, accept: '.pptx,.ppt', group: 'reverse', color: 'purple' },
-];
+  <!-- スタイル設定 (Tailwind CSS) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  
+  <!-- 変換ライブラリの読み込み -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/libs/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
-export default function App() {
-  const [activeTool, setActiveTool] = useState<ToolId>('txt2pdf');
-  const [file, setFile] = useState<File | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [showNextPrompt, setShowNextPrompt] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [generatedFile, setGeneratedFile] = useState<File | null>(null);
-  const [convertedText, setConvertedText] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [imgOrientation, setImgOrientation] = useState<'auto' | 'p' | 'l'>('auto');
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+    .loader { border-top-color: #3b82f6; animation: spinner 0.6s linear infinite; }
+    @keyframes spinner { to { transform: rotate(360deg); } }
+    .drop-zone.active { border-color: #3b82f6; background-color: #eff6ff; }
+  </style>
+</head>
+<body class="p-4 md:p-10">
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  <div class="max-w-4xl mx-auto">
+    <header class="text-center mb-10">
+      <h1 class="text-4xl font-extrabold text-slate-900 mb-2">万能ファイル変換ツール</h1>
+      <p class="text-slate-500">ブラウザ内で安全に変換。iPadOS対応・一括コピー機能付き</p>
+    </header>
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
-      setError(null);
-    }
-  };
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <!-- 左側：ツール選択 -->
+      <div class="space-y-2">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 ml-2">変換モード</p>
+        <div id="tool-list" class="space-y-2">
+          <!-- JSで動的に生成 -->
+        </div>
+      </div>
 
-  const downloadBlob = (blob: Blob, filename: string) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
+      <!-- 右側：メイン操作 -->
+      <div class="md:col-span-2 bg-white rounded-3xl shadow-xl p-6 md:p-8 border border-slate-100">
+        <div id="tool-header" class="mb-6">
+          <h2 id="active-tool-name" class="text-2xl font-bold text-slate-800">TXTからPDF</h2>
+          <p id="active-tool-desc" class="text-slate-400 text-sm">対応: .txt</p>
+        </div>
 
-  const convertFile = async () => {
-    if (!file) return;
-    setIsProcessing(true);
-    setError(null);
-    setConvertedText(null);
-
-    try {
-      switch (activeTool) {
-        case 'txt2pdf': {
-          const text = await file.text();
-          const doc = new jsPDF();
-          const lines = doc.splitTextToSize(text, 180);
-          
-          let y = 15;
-          const pageHeight = doc.internal.pageSize.height;
-          const margin = 15;
-          const lineHeight = 12;
-
-          lines.forEach((line: string) => {
-            if (y + lineHeight > pageHeight - margin) {
-              doc.addPage();
-              y = margin;
-            }
-            doc.text(line, margin, y);
-            y += lineHeight;
-          });
-
-          const pdfBlob = doc.output('blob');
-          const newFileName = file.name.replace(/\.[^/.]+$/, "") + '.pdf';
-          downloadBlob(pdfBlob, newFileName);
-          setGeneratedFile(new File([pdfBlob], newFileName, { type: 'application/pdf' }));
-          setShowSuccessModal(true);
-          break;
-        }
-
-        case 'img2pdf': {
-          const imgUrl = URL.createObjectURL(file);
-          const img = new Image();
-          img.src = imgUrl;
-          
-          try {
-            await new Promise((resolve, reject) => { 
-              img.onload = resolve; 
-              img.onerror = () => reject(new Error('画像の読み込みに失敗しました。形式を確認してください。'));
-            });
-            
-            const width = img.naturalWidth;
-            const height = img.naturalHeight;
-            const widthPt = width * 0.75;
-            const heightPt = height * 0.75;
-
-            let orientation: 'p' | 'l' = widthPt > heightPt ? 'l' : 'p';
-            if (imgOrientation === 'p') orientation = 'p';
-            if (imgOrientation === 'l') orientation = 'l';
-
-            const doc = new jsPDF({
-              orientation: orientation,
-              unit: 'pt',
-              format: [widthPt, heightPt]
-            });
-            
-            doc.addImage(img, 'AUTO', 0, 0, widthPt, heightPt);
-            
-            const pdfBlob = doc.output('blob');
-            const newFileName = file.name.replace(/\.[^/.]+$/, "") + '.pdf';
-            downloadBlob(pdfBlob, newFileName);
-            setGeneratedFile(new File([pdfBlob], newFileName, { type: 'application/pdf' }));
-            
-            if (activeTool === 'img2pdf') {
-              setShowSuccessModal(true);
-            } else {
-              setShowNextPrompt(true);
-            }
-          } finally {
-            URL.revokeObjectURL(imgUrl);
-          }
-          break;
-        }
-
-        case 'pdf2txt': {
-          const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          let fullText = '';
-          
-          for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const content = await page.getTextContent();
-            const strings = content.items.map((item: any) => item.str);
-            fullText += strings.join(' ') + '\n\n';
-          }
-          
-          setConvertedText(fullText);
-          const txtBlob = new Blob([fullText], { type: 'text/plain' });
-          downloadBlob(txtBlob, file.name.replace(/\.[^/.]+$/, "") + '.txt');
-          setShowSuccessModal(true);
-          break;
-        }
-
-        case 'pdf2img': {
-          const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          const page = await pdf.getPage(1);
-          const viewport = page.getViewport({ scale: 2 });
-          
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
-          canvas.height = viewport.height;
-          canvas.width = viewport.width;
-          
-          if (context) {
-            await page.render({ 
-              canvasContext: context, 
-              viewport,
-              canvas: context.canvas 
-            } as any).promise;
-            canvas.toBlob((blob) => {
-              if (blob) downloadBlob(blob, file.name.replace(/\.[^/.]+$/, "") + '.png');
-            }, 'image/png');
-          }
-          setShowSuccessModal(true);
-          break;
-        }
-
-        case 'pdf2pptx': {
-          const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          const pres = new pptxgen();
-          
-          const firstPage = await pdf.getPage(1);
-          const firstViewport = firstPage.getViewport({ scale: 1 });
-          
-          const layoutName = 'PDF_LAYOUT';
-          pres.defineLayout({
-            name: layoutName,
-            width: firstViewport.width / 72,
-            height: firstViewport.height / 72
-          });
-          pres.layout = layoutName;
-          
-          for (let i = 1; i <= Math.min(pdf.numPages, 30); i++) {
-            const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 2.0 });
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-            
-            if (context) {
-              await page.render({ 
-                canvasContext: context, 
-                viewport,
-                canvas: context.canvas
-              } as any).promise;
-              
-              const imgData = canvas.toDataURL('image/jpeg', 0.8);
-              const slide = pres.addSlide();
-              slide.addImage({ 
-                data: imgData, 
-                x: 0, 
-                y: 0, 
-                w: firstViewport.width / 72, 
-                h: firstViewport.height / 72 
-              });
-            }
-          }
-          
-          await pres.writeFile({ fileName: file.name.replace(/\.[^/.]+$/, "") + '.pptx' });
-          setGeneratedFile(null);
-          setShowSuccessModal(true);
-          break;
-        }
-
-        case 'video2mp3': {
-          const audioContext = new AudioContext();
-          const arrayBuffer = await file.arrayBuffer();
-          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-          const wavBlob = bufferToWav(audioBuffer);
-          downloadBlob(wavBlob, file.name.replace(/\.[^/.]+$/, "") + '.wav');
-          setShowSuccessModal(true);
-          break;
-        }
-
-        case 'pptx2pdf': {
-          const doc = new jsPDF();
-          doc.setFontSize(20);
-          doc.text("PPTX to PDF Conversion", 10, 20);
-          doc.setFontSize(12);
-          doc.text(`File: ${file.name}`, 10, 30);
-          doc.text("Note: Full PPTX rendering requires server-side processing.", 10, 40);
-          doc.text("This PDF contains the extracted metadata from your presentation.", 10, 50);
-          
-          const pdfBlob = doc.output('blob');
-          downloadBlob(pdfBlob, file.name.replace(/\.[^/.]+$/, "") + '.pdf');
-          setShowSuccessModal(true);
-          break;
-        }
-      }
-    } catch (err: any) {
-      console.error('Conversion error:', err);
-      setError(err.message || '変換中にエラーが発生しました。');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleNextPrompt = (yes: boolean) => {
-    setShowNextPrompt(false);
-    if (yes && generatedFile) {
-      setActiveTool('pdf2pptx');
-      setFile(generatedFile);
-    } else {
-      setFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const activeToolData = TOOLS.find(t => t.id === activeTool)!;
-
-  return (
-    <div className="min-h-screen bg-[#fcfcfc] font-sans text-slate-900 selection:bg-blue-100">
-      <div className="max-w-6xl mx-auto px-6 py-12">
-        <header className="text-center mb-16">
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-            <h1 className="text-5xl font-extrabold tracking-tight text-slate-900 mb-4">万能ファイル変換ツール</h1>
-            <p className="text-lg text-slate-500 max-w-2xl mx-auto">ドキュメント、画像、メディアファイルをブラウザ上で安全に変換。</p>
-          </motion.div>
-        </header>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-4 space-y-8">
-            <section className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6">
-              <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6 flex items-center">
-                <ArrowRight className="w-4 h-4 mr-2 text-blue-500" /> 基本変換
-              </h2>
-              <div className="grid grid-cols-1 gap-3">
-                {TOOLS.filter(t => t.group === 'forward').map((tool) => {
-                  const Icon = tool.icon;
-                  const isActive = activeTool === tool.id;
-                  return (
-                    <button key={tool.id} onClick={() => { setActiveTool(tool.id); setFile(null); setError(null); }}
-                      className={cn("flex items-center w-full p-4 rounded-2xl transition-all duration-300 group text-left",
-                        isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-white border border-slate-100 text-slate-600 hover:border-slate-200 hover:bg-slate-50')}>
-                      <div className={cn("p-2 rounded-xl mr-4 transition-colors", isActive ? "bg-white/20" : "bg-blue-50 text-blue-500")}>
-                        <Icon size={20} />
-                      </div>
-                      <span className="font-bold">{tool.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mt-10 mb-6 flex items-center">
-                <ArrowLeftRight className="w-4 h-4 mr-2 text-purple-500" /> 逆変換・抽出
-              </h2>
-              <div className="grid grid-cols-1 gap-3">
-                {TOOLS.filter(t => t.group === 'reverse').map((tool) => {
-                  const Icon = tool.icon;
-                  const isActive = activeTool === tool.id;
-                  return (
-                    <button key={tool.id} onClick={() => { setActiveTool(tool.id); setFile(null); setError(null); }}
-                      className={cn("flex items-center w-full p-4 rounded-2xl transition-all duration-300 group text-left",
-                        isActive ? 'bg-purple-600 text-white shadow-lg shadow-purple-100' : 'bg-white border border-slate-100 text-slate-600 hover:border-slate-200 hover:bg-slate-50')}>
-                      <div className={cn("p-2 rounded-xl mr-4 transition-colors", isActive ? "bg-white/20" : "bg-purple-50 text-purple-500")}>
-                        <Icon size={20} />
-                      </div>
-                      <span className="font-bold">{tool.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          </div>
-
-          <div className="lg:col-span-8">
-            <motion.div key={activeTool} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-              className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 p-8 md:p-12 h-full flex flex-col">
-              <div className="flex items-center justify-between mb-10">
-                <div>
-                  <h2 className="text-3xl font-bold text-slate-900 mb-2">{activeToolData.name}</h2>
-                  <p className="text-slate-500">対応形式: {activeToolData.accept}</p>
-                </div>
-                <div className={cn("p-4 rounded-2xl", activeToolData.group === 'forward' ? "bg-blue-50 text-blue-600" : "bg-purple-50 text-purple-600")}>
-                  <activeToolData.icon size={32} />
-                </div>
-              </div>
-
-              {activeTool === 'img2pdf' && (
-                <div className="mb-6 flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
-                  <span className="text-sm font-bold text-slate-500">向き:</span>
-                  <div className="flex gap-2">
-                    {[{ id: 'auto', label: '自動' }, { id: 'p', label: '縦' }, { id: 'l', label: '横' }].map((opt) => (
-                      <button key={opt.id} onClick={() => setImgOrientation(opt.id as any)}
-                        className={cn("px-4 py-2 rounded-xl text-sm font-bold transition-all", imgOrientation === opt.id ? "bg-blue-600 text-white shadow-md" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100")}>
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className={cn("flex-1 flex flex-col items-center justify-center border-2 border-dashed rounded-[2rem] p-12 transition-all relative group", file ? "border-green-200 bg-green-50/30" : "border-slate-200 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300")}>
-                <input ref={fileInputRef} type="file" accept={activeToolData.accept} onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-                <AnimatePresence mode="wait">
-                  {file ? (
-                    <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center text-center">
-                      <div className="w-20 h-20 bg-green-100 text-green-600 rounded-3xl flex items-center justify-center mb-6 shadow-inner"><CheckCircle2 size={40} /></div>
-                      <span className="font-bold text-xl text-slate-800 mb-2 truncate max-w-xs">{file.name}</span>
-                      <span className="text-slate-400 font-medium">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
-                    </motion.div>
-                  ) : (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center text-center text-slate-400">
-                      <div className="w-20 h-20 bg-white border border-slate-100 rounded-3xl flex items-center justify-center mb-6 shadow-sm group-hover:scale-110 transition-transform duration-300">
-                        <activeToolData.icon size={40} className={activeToolData.group === 'forward' ? "text-blue-400" : "text-purple-400"} />
-                      </div>
-                      <span className="font-bold text-lg text-slate-600 mb-2">ファイルを選択またはドラッグ</span>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {error && <div className="mt-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start text-red-600"><AlertCircle className="w-5 h-5 mr-3 mt-0.5" /><p className="text-sm font-medium">{error}</p></div>}
-
-              <div className="mt-10 flex justify-center">
-                <button onClick={convertFile} disabled={!file || isProcessing}
-                  className={cn("relative overflow-hidden group flex items-center px-12 py-5 rounded-2xl font-bold text-xl transition-all duration-300", !file || isProcessing ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : activeToolData.group === 'forward' ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-xl' : 'bg-purple-600 text-white hover:bg-purple-700 hover:shadow-xl')}>
-                  {isProcessing ? <span className="flex items-center"><Loader2 className="animate-spin mr-3" size={24} /> 処理中...</span> : <span className="flex items-center">変換を開始 <Download className="ml-3" size={24} /></span>}
-                </button>
-              </div>
-            </motion.div>
+        <!-- 画像の向き設定 (画像変換時のみ表示) -->
+        <div id="orientation-options" class="hidden mb-6 p-4 bg-slate-50 rounded-2xl flex items-center gap-4">
+          <span class="text-sm font-bold text-slate-500">向き:</span>
+          <div class="flex gap-2">
+            <button onclick="setOrientation('auto')" id="opt-auto" class="px-4 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white shadow-md">自動</button>
+            <button onclick="setOrientation('p')" id="opt-p" class="px-4 py-2 rounded-xl text-sm font-bold bg-white text-slate-600 border">縦</button>
+            <button onclick="setOrientation('l')" id="opt-l" class="px-4 py-2 rounded-xl text-sm font-bold bg-white text-slate-600 border">横</button>
           </div>
         </div>
 
-        <AnimatePresence>
-          {showNextPrompt && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-6">
-              <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl">
-                <div className="text-center">
-                  <div className="w-20 h-20 bg-green-50 text-green-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner"><CheckCircle2 size={40} /></div>
-                  <h3 className="text-2xl font-bold text-slate-900 mb-3">PDF変換が完了しました！</h3>
-                  <p className="text-slate-500 mb-6">続けて、このPDFをPowerPoint（PPTX）形式に変換しますか？</p>
-                  <button onClick={() => generatedFile && downloadBlob(generatedFile, generatedFile.name)} className="w-full mb-6 py-3 px-6 bg-slate-100 text-slate-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-200 transition-all"><Download size={20} /> ファイルをダウンロード</button>
-                  <div className="flex flex-col gap-3">
-                    <button onClick={() => handleNextPrompt(true)} className="w-full py-4 px-6 bg-blue-600 text-white rounded-2xl font-bold text-lg">はい、PPTXに変換する</button>
-                    <button onClick={() => handleNextPrompt(false)} className="w-full py-4 px-6 bg-slate-50 text-slate-600 rounded-2xl font-bold text-lg">いいえ、終了する</button>
-                  </div>
-                </div>
-              </motion.div>
+        <!-- ファイル選択エリア -->
+        <div id="drop-zone" class="border-2 border-dashed border-slate-200 rounded-3xl p-10 text-center bg-slate-50 hover:bg-slate-100 transition-all cursor-pointer relative">
+          <input type="file" id="file-input" class="absolute inset-0 opacity-0 cursor-pointer">
+          <div id="file-info-empty">
+            <div class="text-slate-300 mb-4 flex justify-center">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
             </div>
-          )}
-        </AnimatePresence>
+            <p class="font-bold text-slate-600">ファイルを選択またはドラッグ</p>
+          </div>
+          <div id="file-info-selected" class="hidden text-blue-600">
+            <div class="mb-4 flex justify-center">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            </div>
+            <p id="selected-file-name" class="font-bold text-xl truncate px-4"></p>
+            <p id="selected-file-size" class="text-sm opacity-60 mt-1"></p>
+          </div>
+        </div>
 
-        <AnimatePresence>
-          {showSuccessModal && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-6">
-              <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl">
-                <div className="text-center">
-                  <div className="w-20 h-20 bg-green-50 text-green-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner"><CheckCircle2 size={40} /></div>
-                  <h3 className="text-2xl font-bold text-slate-900 mb-3">変換が完了しました！</h3>
-                  <p className="text-slate-500 mb-8">ファイルが自動的にダウンロードされます。されない場合は下のボタンをクリックしてください。</p>
-                  {convertedText && (
-                    <div className="mb-8">
-                      <div className="bg-slate-50 p-4 rounded-2xl text-left max-h-40 overflow-y-auto mb-4 border border-slate-100"><pre className="text-xs text-slate-600 whitespace-pre-wrap font-mono">{convertedText.substring(0, 500)}{convertedText.length > 500 ? '...' : ''}</pre></div>
-                      <button onClick={() => { navigator.clipboard.writeText(convertedText); alert('コピーしました！'); }} className="w-full py-3 px-6 bg-emerald-50 text-emerald-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-100 transition-all"><FileText size={20} /> テキストをコピー</button>
-                    </div>
-                  )}
-                  <button onClick={() => generatedFile && downloadBlob(generatedFile, generatedFile.name)} className="w-full mb-8 py-4 px-6 bg-blue-600 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-3"><Download size={24} /> ダウンロード</button>
-                  <button onClick={() => { setShowSuccessModal(false); setFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="w-full py-4 px-6 bg-slate-50 text-slate-600 rounded-2xl font-bold text-lg">閉じる</button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
+        <button id="convert-btn" disabled class="w-full mt-8 py-4 bg-slate-100 text-slate-300 rounded-2xl font-bold text-xl transition-all flex items-center justify-center gap-3">
+          変換を実行
+        </button>
       </div>
     </div>
-  );
-}
+  </div>
 
-function bufferToWav(abuffer: AudioBuffer) {
-  const numOfChan = abuffer.numberOfChannels;
-  const length = abuffer.length * numOfChan * 2 + 44;
-  const buffer = new ArrayBuffer(length);
-  const view = new DataView(buffer);
-  const channels = [];
-  let i, sample, offset = 0, pos = 0;
-  const setUint16 = (d: number) => { view.setUint16(pos, d, true); pos += 2; };
-  const setUint32 = (d: number) => { view.setUint32(pos, d, true); pos += 4; };
-  setUint32(0x46464952); setUint32(length - 8); setUint32(0x45564157); setUint32(0x20746d66); setUint32(16); setUint16(1); setUint16(numOfChan); setUint32(abuffer.sampleRate); setUint32(abuffer.sampleRate * 2 * numOfChan); setUint16(numOfChan * 2); setUint16(16); setUint32(0x61746164); setUint32(length - pos - 4);
-  for (i = 0; i < abuffer.numberOfChannels; i++) channels.push(abuffer.getChannelData(i));
-  while (pos < length) { for (i = 0; i < numOfChan; i++) { sample = Math.max(-1, Math.min(1, channels[i][offset])); sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0; view.setInt16(pos, sample, true); pos += 2; } offset++; }
-  return new Blob([buffer], { type: "audio/wav" });
-}
+  <!-- 完了モーダル -->
+  <div id="modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-6">
+    <div class="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-md w-full shadow-2xl text-center">
+      <div class="w-20 h-20 bg-green-50 text-green-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+      </div>
+      <h3 class="text-2xl font-bold text-slate-900 mb-2">変換完了！</h3>
+      <p class="text-slate-500 mb-6">ファイルが作成されました。</p>
+
+      <!-- テキストコピーエリア (PDF2TXT時のみ) -->
+      <div id="text-result-area" class="hidden mb-6">
+        <div class="bg-slate-50 p-4 rounded-2xl text-left max-h-40 overflow-y-auto mb-4 border text-xs font-mono text-slate-600 whitespace-pre-wrap" id="text-preview"></div>
+        <button onclick="copyExtractedText()" class="w-full py-3 bg-emerald-50 text-emerald-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-100 transition-all">
+          テキストを一括コピー
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <button id="download-manual-btn" class="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-blue-100 flex items-center justify-center gap-2">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          ダウンロード
+        </button>
+        <button onclick="closeModal()" class="w-full py-4 bg-slate-50 text-slate-600 rounded-2xl font-bold text-lg">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // PDF.js設定
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const tools = [
+      { id: 'txt2pdf', name: 'TXTからPDF', accept: '.txt', group: 'forward' },
+      { id: 'img2pdf', name: '画像からPDF', accept: 'image/*', group: 'forward' },
+      { id: 'pdf2pptx', name: 'PDFからPPTX', accept: '.pdf', group: 'forward' },
+      { id: 'video2mp3', name: '動画からMP3', accept: 'video/*', group: 'forward' },
+      { id: 'pdf2txt', name: 'PDFからTXT', accept: '.pdf', group: 'reverse' },
+      { id: 'pdf2img', name: 'PDFから画像', accept: '.pdf', group: 'reverse' }
+    ];
+
+    let activeTool = 'txt2pdf';
+    let selectedFile = null;
+    let generatedBlob = null;
+    let generatedName = "";
+    let extractedText = "";
+    let imgOrientation = 'auto';
+
+    // UI初期化
+    const toolList = document.getElementById('tool-list');
+    tools.forEach(t => {
+      const btn = document.createElement('button');
+      btn.id = `btn-${t.id}`;
+      btn.className = `flex items-center w-full p-4 rounded-2xl transition-all border text-left font-bold ${t.id === activeTool ? 'bg-blue-600 text-white shadow-lg border-blue-600' : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'}`;
+      btn.innerHTML = `<span>${t.name}</span>`;
+      btn.onclick = () => selectTool(t.id);
+      toolList.appendChild(btn);
+    });
+
+    function selectTool(id) {
+      activeTool = id;
+      selectedFile = null;
+      document.getElementById('file-input').value = '';
+      updateUI();
+    }
+
+    function updateUI() {
+      const tool = tools.find(t => t.id === activeTool);
+      document.getElementById('active-tool-name').innerText = tool.name;
+      document.getElementById('active-tool-desc').innerText = `対応: ${tool.accept}`;
+      
+      // ボタンのスタイル更新
+      tools.forEach(t => {
+        const btn = document.getElementById(`btn-${t.id}`);
+        const isActive = t.id === activeTool;
+        const color = t.group === 'forward' ? 'blue' : 'purple';
+        btn.className = `flex items-center w-full p-4 rounded-2xl transition-all border text-left font-bold ${isActive ? `bg-${color}-600 text-white shadow-lg border-${color}-600` : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'}`;
+      });
+
+      // 画像オプションの表示切り替え
+      document.getElementById('orientation-options').classList.toggle('hidden', activeTool !== 'img2pdf');
+      
+      // ファイル情報の表示
+      if (selectedFile) {
+        document.getElementById('file-info-empty').classList.add('hidden');
+        document.getElementById('file-info-selected').classList.remove('hidden');
+        document.getElementById('selected-file-name').innerText = selectedFile.name;
+        document.getElementById('selected-file-size').innerText = (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB';
+        document.getElementById('convert-btn').disabled = false;
+        document.getElementById('convert-btn').className = `w-full mt-8 py-4 rounded-2xl font-bold text-xl transition-all flex items-center justify-center gap-3 text-white shadow-lg ${tool.group === 'forward' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`;
+      } else {
+        document.getElementById('file-info-empty').classList.remove('hidden');
+        document.getElementById('file-info-selected').classList.add('hidden');
+        document.getElementById('convert-btn').disabled = true;
+        document.getElementById('convert-btn').className = "w-full mt-8 py-4 bg-slate-100 text-slate-300 rounded-2xl font-bold text-xl flex items-center justify-center gap-3";
+      }
+    }
+
+    function setOrientation(o) {
+      imgOrientation = o;
+      ['auto', 'p', 'l'].forEach(opt => {
+        const btn = document.getElementById(`opt-${opt}`);
+        if (opt === o) {
+          btn.className = "px-4 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white shadow-md";
+        } else {
+          btn.className = "px-4 py-2 rounded-xl text-sm font-bold bg-white text-slate-600 border";
+        }
+      });
+    }
+
+    document.getElementById('file-input').onchange = (e) => {
+      if (e.target.files.length > 0) {
+        selectedFile = e.target.files[0];
+        updateUI();
+      }
+    };
+
+    // 変換実行
+    document.getElementById('convert-btn').onclick = async () => {
+      if (!selectedFile) return;
+      const btn = document.getElementById('convert-btn');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<div class="loader w-6 h-6 border-4 border-white rounded-full"></div> 処理中...';
+
+      try {
+        const { jsPDF } = window.jspdf;
+        
+        if (activeTool === 'txt2pdf') {
+          const text = await selectedFile.text();
+          const doc = new jsPDF();
+          const lines = doc.splitTextToSize(text, 180);
+          let y = 15;
+          lines.forEach(line => {
+            if (y > 280) { doc.addPage(); y = 15; }
+            doc.text(line, 15, y); y += 7;
+          });
+          generatedBlob = doc.output('blob');
+          generatedName = selectedFile.name.replace(/\.[^/.]+$/, "") + ".pdf";
+        } 
+        else if (activeTool === 'img2pdf') {
+          const imgUrl = URL.createObjectURL(selectedFile);
+          const img = new Image();
+          img.src = imgUrl;
+          await new Promise((res) => img.onload = res);
+          const wPt = img.naturalWidth * 0.75, hPt = img.naturalHeight * 0.75;
+          let orient = wPt > hPt ? 'l' : 'p';
+          if (imgOrientation === 'p') orient = 'p';
+          if (imgOrientation === 'l') orient = 'l';
+          const doc = new jsPDF({ orientation: orient, unit: 'pt', format: [wPt, hPt] });
+          doc.addImage(img, 'JPEG', 0, 0, wPt, hPt);
+          generatedBlob = doc.output('blob');
+          generatedName = selectedFile.name.replace(/\.[^/.]+$/, "") + ".pdf";
+          URL.revokeObjectURL(imgUrl);
+        }
+        else if (activeTool === 'pdf2txt') {
+          const buffer = await selectedFile.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+          extractedText = "";
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            extractedText += content.items.map(item => item.str).join(" ") + "\n\n";
+          }
+          generatedBlob = new Blob([extractedText], { type: 'text/plain' });
+          generatedName = selectedFile.name.replace(/\.[^/.]+$/, "") + ".txt";
+          document.getElementById('text-result-area').classList.remove('hidden');
+          document.getElementById('text-preview').innerText = extractedText.substring(0, 1000) + "...";
+        }
+        else if (activeTool === 'pdf2pptx') {
+          const buffer = await selectedFile.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+          const pres = new PptxGenJS();
+          const firstPage = await pdf.getPage(1);
+          const firstView = firstPage.getViewport({ scale: 1 });
+          pres.defineLayout({ name: 'PDF', width: firstView.width / 72, height: firstView.height / 72 });
+          pres.layout = 'PDF';
+          for (let i = 1; i <= Math.min(pdf.numPages, 30); i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 2 });
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width; canvas.height = viewport.height;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            pres.addSlide().addImage({ data: canvas.toDataURL('image/jpeg', 0.8), x: 0, y: 0, w: '100%', h: '100%' });
+          }
+          generatedName = selectedFile.name.replace(/\.[^/.]+$/, "") + ".pptx";
+          await pres.writeFile({ fileName: generatedName });
+          // PPTXは保存後にBlobを取得するのが難しいため、手動DLボタンは無効化
+          document.getElementById('download-manual-btn').classList.add('hidden');
+        }
+        else if (activeTool === 'video2mp3') {
+          const ctx = new AudioContext();
+          const buffer = await ctx.decodeAudioData(await selectedFile.arrayBuffer());
+          generatedBlob = bufferToWav(buffer);
+          generatedName = selectedFile.name.replace(/\.[^/.]+$/, "") + ".wav";
+        }
+
+        if (generatedBlob && activeTool !== 'pdf2pptx') {
+          downloadBlob(generatedBlob, generatedName);
+          document.getElementById('download-manual-btn').classList.remove('hidden');
+        }
+        
+        document.getElementById('modal').classList.remove('hidden');
+      } catch (err) {
+        alert("エラーが発生しました: " + err.message);
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    };
+
+    function copyExtractedText() {
+      navigator.clipboard.writeText(extractedText);
+      alert("テキストをコピーしました！");
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.add('hidden');
+      document.getElementById('text-result-area').classList.add('hidden');
+      selectedFile = null;
+      updateUI();
+    }
+
+    document.getElementById('download-manual-btn').onclick = () => {
+      if (generatedBlob) downloadBlob(generatedBlob, generatedName);
+    };
+
+    function bufferToWav(abuffer) {
+      const numOfChan = abuffer.numberOfChannels, length = abuffer.length * numOfChan * 2 + 44, buffer = new ArrayBuffer(length), view = new DataView(buffer);
+      let pos = 0;
+      const set32 = (d) => { view.setUint32(pos, d, true); pos += 4; };
+      const set16 = (d) => { view.setUint16(pos, d, true); pos += 2; };
+      set32(0x46464952); set32(length - 8); set32(0x45564157); set32(0x20746d66); set32(16); set16(1); set16(numOfChan); set32(abuffer.sampleRate); set32(abuffer.sampleRate * 2 * numOfChan); set16(numOfChan * 2); set16(16); set32(0x61746164); set32(length - pos - 4);
+      for (let i = 0; i < abuffer.length; i++) {
+        for (let c = 0; c < numOfChan; c++) {
+          let s = Math.max(-1, Math.min(1, abuffer.getChannelData(c)[i]));
+          view.setInt16(pos, s < 0 ? s * 32768 : s * 32767, true); pos += 2;
+        }
+      }
+      return new Blob([buffer], { type: "audio/wav" });
+    }
+
+    updateUI();
+  </script>
+</body>
+</html>
